@@ -2,6 +2,8 @@
 Running on central computer, handles diagnosis and database
 
 # Running
+> conda activate desk_env
+
 > python routes.py
 
 # Description
