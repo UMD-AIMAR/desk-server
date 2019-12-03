@@ -1,27 +1,47 @@
 from flask import Flask, render_template, request
 
+import sys
 import numpy as np
-import cv2
+
+
+class remove_path:
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
+        sys.path.remove(self.path)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            sys.path.append(self.path)
+        except Exception as e:
+            print(e)
+
+
+# ROS messes with opencv imports, so this is necessary to run the server on a desktop that also has ROS installed
+ROS_PATH = '/opt/ros/kinetic/lib/python2.7/dist-packages'
+with remove_path(ROS_PATH):
+    import cv2
 
 app = Flask(__name__)
 
-rospy_imported = False
 skin_imported = False
 db_imported = False
 
 try:
     print("importing db...")
-    from flaskaimar import db
-    db.init()
+    import db
     db_imported = True
-except ImportError:
+except ImportError as e:
+    print(e)
     print("unable to import db.py")
 
 try:
     print("importing skin...")
-    from flaskaimar import skin
+    import skin
     skin_imported = True
-except ImportError:
+except ImportError as e:
+    print(e)
     print("keras/tensorflow not installed. disabling skin functions")
 
 
