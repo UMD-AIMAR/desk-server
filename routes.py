@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 
 import sys
 import numpy as np
@@ -91,10 +91,10 @@ def diagnose_skin_image():
     img = np.expand_dims(img, axis=0)
     print(img.shape)
 
-    label = skin.classify(img)
-    response = 'image received. size={}x{}, prediction={}'.format(img.shape[1], img.shape[0], label)
+    report = skin.classify(img)
+    print(report)
 
-    return response
+    return jsonify(report)
 
 
 if __name__ == "__main__":
