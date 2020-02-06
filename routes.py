@@ -20,8 +20,8 @@ class remove_path:
 
 # ROS messes with opencv imports, so this is necessary to run the server on a desktop that also has ROS installed
 ROS_PATH = '/opt/ros/kinetic/lib/python2.7/dist-packages'
-with remove_path(ROS_PATH):
-    import cv2
+# with remove_path(ROS_PATH):
+import cv2
 
 app = Flask(__name__)
 
@@ -84,13 +84,12 @@ def query_patient():
 @app.route('/api/skin', methods=['POST'])
 def diagnose_skin_image():
     # convert string of image data to uint8
-    nparr = np.fromstring(request.data, np.uint8)
+    nparr = np.frombuffer(request.data, np.uint8)
     # decode image
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     label = skin.classify(img)
-    
-    response = 'image received. size={}x{}, prediction='.format(img.shape[1], img.shape[0], label)
+    response = 'image received. size={}x{}, prediction={}'.format(img.shape[1], img.shape[0], label)
 
     return response
 

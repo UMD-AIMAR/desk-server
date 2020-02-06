@@ -12,6 +12,7 @@ classifier = None
 
 
 def classify(x):
+    print("Running classifier on image")
     return classifier.predict(conv_base.predict(x))
 
 
