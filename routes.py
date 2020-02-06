@@ -87,6 +87,9 @@ def diagnose_skin_image():
     nparr = np.frombuffer(request.data, np.uint8)
     # decode image
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    img = cv2.resize(img, (224, 224))
+    img = np.expand_dims(img, axis=0)
+    print(img.shape)
 
     label = skin.classify(img)
     response = 'image received. size={}x{}, prediction={}'.format(img.shape[1], img.shape[0], label)

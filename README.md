@@ -1,5 +1,13 @@
-# desk-server
-Running on central computer, handles diagnosis and database
+# Files
+
+    .
+    ├── models                  # skin lesion diagnosis models
+    ├── datagen.py              # uses dataset.json to generate patient data
+    ├── dataset.json            # stores a list of names, addresses, etc.
+    ├── db.py                   # database functions (add/remove patient, etc.)
+    ├── flaskaimar.db           # the actual database file (.db = database)
+    ├── routes.py               # routes incoming web requests
+    └── skin.py                 # skin diagnosis code
 
 # Running
 > conda activate desk_env
