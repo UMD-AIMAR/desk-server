@@ -83,14 +83,16 @@ def query_patient():
 # Skin Image Processing ##
 @app.route('/api/skin', methods=['POST'])
 def diagnose_skin_image():
-    # convert string of image data to uint8
+    # convert request data into np.array
     nparr = np.frombuffer(request.data, np.uint8)
-    # decode image
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # display image briefly
+    cv2.imshow("Skin Image", img)
+    cv2.waitKey(2000)
+    cv2.destroyAllWindows()
+    # resize and run through model
     img = cv2.resize(img, (224, 224))
     img = np.expand_dims(img, axis=0)
-    print(img.shape)
-
     report = skin.classify(img)
     print(report)
 
