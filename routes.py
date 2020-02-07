@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class remove_path:
@@ -86,10 +87,11 @@ def diagnose_skin_image():
     # convert request data into np.array
     nparr = np.frombuffer(request.data, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    print(f"Received skin lesion image with shape {img.shape}")
     # display image briefly
-    cv2.imshow("Skin Image", img)
-    cv2.waitKey(2000)
-    cv2.destroyAllWindows()
+    plt.imshow(img)
+    plt.pause(3)
+    plt.close()
     # resize and run through model
     img = cv2.resize(img, (224, 224))
     img = np.expand_dims(img, axis=0)
