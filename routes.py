@@ -102,4 +102,4 @@ def diagnose_skin_image():
 
 if __name__ == "__main__":
     ip = input("Desktop IP: ")
-    app.run(host=ip, port="5000", debug=False);
+    app.run(host=ip, port="5000", debug=False)
