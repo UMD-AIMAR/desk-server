@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
+from datetime import datetime
 
 
 class remove_path:
@@ -88,10 +88,9 @@ def diagnose_skin_image():
     nparr = np.frombuffer(request.data, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     print(f"Received skin lesion image with shape {img.shape}")
-    # display image briefly
-    plt.imshow(img)
-    plt.pause(3)
-    plt.close()
+    # save image
+    dt_string = datetime.now().strftime("%d/%m/%Y %H_%M_%S")
+    cv2.imwrite(f"./images/{dt_string}.png", img)
     # resize and run through model
     img = cv2.resize(img, (224, 224))
     img = np.expand_dims(img, axis=0)
