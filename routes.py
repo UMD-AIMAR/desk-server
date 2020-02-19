@@ -89,8 +89,10 @@ def diagnose_skin_image():
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     print(f"Received skin lesion image with shape {img.shape}")
     # save image
-    dt_string = datetime.now().strftime("%d/%m/%Y %H_%M_%S")
-    cv2.imwrite(f"./images/{dt_string}.png", img)
+    dt_string = datetime.now().strftime("%d_%m_%Y %H_%M_%S")
+    img_save_status = cv2.imwrite(f"./images/{dt_string}.png", img)
+    if not img_save_status:
+        print("Error encountered in saving image. Make sure the 'images' directory exists.")
     # resize and run through model
     img = cv2.resize(img, (224, 224))
     img = np.expand_dims(img, axis=0)
