@@ -3,13 +3,11 @@ import datagen
 
 DB_NAME = 'flaskaimar.db'
 
-PATIENT_COLUMN_ORDER = ['patient_id', 'full_name', 'gender', 'age']
+PATIENT_COLUMN_ORDER = ['patient_id', 'full_name']
 VISIT_COLUMN_ORDER = ['visit_id', 'patient_id']
 PATIENT_COLUMN_TYPES = {
     'patient_id': "INTEGER PRIMARY KEY",
-    'full_name': "INTEGER NOT NULL",
-    'gender': "TEXT NOT NULL",
-    'age': "SMALLINT NOT NULL",
+    'full_name': "INTEGER NOT NULL"
 }
 VISIT_COLUMN_TYPES = {
     'visit_id': "INTEGER PRIMARY KEY",
@@ -18,8 +16,22 @@ VISIT_COLUMN_TYPES = {
 PATIENT_COLUMN_COUNT = len(PATIENT_COLUMN_ORDER)
 VISIT_COLUMN_COUNT = len(VISIT_COLUMN_ORDER)
 
+# Doesn't need to be persistent.
+patient_queue = []
+# TODO: Migrate to SQLAlchemy
 
-def query_patient(patient_id):
+
+def enqueue_patient(patient_id):
+    patient_queue.append(patient_id)
+
+
+def dequeue_patient():
+    if not patient_queue:
+        return None
+    return patient_queue.pop(0)
+
+
+def is_patient_registered(patient_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -32,20 +44,33 @@ def query_patient(patient_id):
     return resp_string
 
 
-# patient: dict of param type names to values
-def insert_patient(patient):
+# TODO: face detection
+def get_patient_id(full_name, image_data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    patient['patient_id'] = get_max_patient_id() + 1
-    sql_command = 'INSERT INTO patients VALUES(' + '?,' * (PATIENT_COLUMN_COUNT - 1) + "?)"
-    args = [patient[param] for param in PATIENT_COLUMN_ORDER]
+    sql_command = 'SELECT * FROM patients WHERE full_name=?'
+    args = (full_name, )
+
+    c.execute(sql_command, args)
+    conn.close()
+
+
+# TODO: Create patient entry and link with face image
+# Face images will go in a folder corresponding to the patient id.
+def insert_patient(full_name, image_data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    patient_id = get_max_patient_id() + 1
+    sql_command = 'INSERT INTO patients VALUES(' + '?, ?)'
+    args = (patient_id, full_name)
 
     c.execute(sql_command, args)
     conn.commit()
     conn.close()
-    resp_string = "Inserted " + "{}, " * (PATIENT_COLUMN_COUNT - 1) + '{})'
-    resp_string = resp_string.format(*args)
+    print(f"Added new patient {full_name} with id {patient_id}.")
+    resp_string = ""
     return resp_string
 
 
@@ -59,6 +84,7 @@ def delete_patient(patient_id):
     c.execute(sql_command, args)
     conn.commit()
     conn.close()
+    print(f"Deleted patient id {patient_id}.")
     resp_string = ""
     return resp_string
 
@@ -91,31 +117,36 @@ def create_patient_table():
     conn.close()
 
 
-def delete_table(table):
+def delete_table(table_name):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    sql_command = f'DROP TABLE {table}'
+    sql_command = f'DROP TABLE {table_name}'
 
     c.execute(sql_command)
     conn.commit()
     conn.close()
 
 
-def get_patient_table():
+def get_table(table_name):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('SELECT * FROM patients')
+
+    sql_command = f'SELECT * FROM {table_name}'
+
+    c.execute(sql_command)
     table = c.fetchall()
     conn.close()
     return table
 
 
-def print_patient_table():
-    for row in get_patient_table():
+def print_table(table_name):
+    for row in get_table(table_name):
         print(row)
 
 
 def generate_patients(num_patients):
     for patient in datagen.generate_patients(num_patients):
-        insert_patient(patient)
+        # TODO: Generate random faces or use filler images
+        image_data = None
+        insert_patient(patient, image_data)
