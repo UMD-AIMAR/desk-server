@@ -1,31 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 
-import sys
-import numpy as np
-from datetime import datetime
-
-
-class remove_path:
-    def __init__(self, path):
-        self.path = path
-
-    def __enter__(self):
-        sys.path.remove(self.path)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            sys.path.append(self.path)
-        except Exception as e:
-            print(e)
-
-
-# ROS messes with opencv imports, so this is necessary to run the server on a desktop that also has ROS installed
-ROS_PATH = '/opt/ros/kinetic/lib/python2.7/dist-packages'
-# with remove_path(ROS_PATH):
-import cv2
-
 app = Flask(__name__)
-
 skin_imported = False
 db_imported = False
 
@@ -58,7 +33,7 @@ def index():
 # Need some sort of login mechanism
 @app.route('/api/patient/insert', methods=['GET'])
 def insert_patient():
-    args = {key: request.args.get(key) for key in db.param_ordering}
+    args = {key: request.args.get(key) for key in db.PATIENT_COLUMN_ORDER}
     resp = db.insert_patient(args)
     return resp
 
@@ -84,22 +59,7 @@ def query_patient():
 # Skin Image Processing ##
 @app.route('/api/skin', methods=['POST'])
 def diagnose_skin_image():
-    # convert request data into np.array
-    nparr = np.frombuffer(request.data, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    print(f"Received skin lesion image with shape {img.shape}")
-    # save image
-    dt_string = datetime.now().strftime("%d_%m_%Y %H_%M_%S")
-    img_save_status = cv2.imwrite(f"./images/{dt_string}.png", img)
-    if not img_save_status:
-        print("Error encountered in saving image. Make sure the 'images' directory exists.")
-    # resize and run through model
-    img = cv2.resize(img, (224, 224))
-    img = np.expand_dims(img, axis=0)
-    report = skin.classify(img)
-    print(report)
-
-    return jsonify(report)
+    return jsonify(skin.classify(request.data))
 
 
 if __name__ == "__main__":
