@@ -1,5 +1,7 @@
+import os
 import sqlite3
 import datagen
+import image_util
 
 DB_NAME = 'flaskaimar.db'
 
@@ -16,19 +18,20 @@ VISIT_COLUMN_TYPES = {
 PATIENT_COLUMN_COUNT = len(PATIENT_COLUMN_ORDER)
 VISIT_COLUMN_COUNT = len(VISIT_COLUMN_ORDER)
 
-# Doesn't need to be persistent.
-patient_queue = []
 # TODO: Migrate to SQLAlchemy
+checkup_room_queue = []  # Doesn't need to be persistent.
 
 
 def enqueue_patient(patient_id):
-    patient_queue.append(patient_id)
+    """ Signals that a patient is now waiting in an individual room, where AIMAR can come check up on them. """
+    checkup_room_queue.append(patient_id)
 
 
 def dequeue_patient():
-    if not patient_queue:
-        return None
-    return patient_queue.pop(0)
+    """ Gets the next patient we want AIMAR to go check up on. 0 means the queue is empty. """
+    if not checkup_room_queue:
+        return 0
+    return checkup_room_queue.pop(0)
 
 
 def is_patient_registered(patient_id):
@@ -44,8 +47,8 @@ def is_patient_registered(patient_id):
     return resp_string
 
 
-# TODO: face detection
 def get_patient_id(full_name, image_data):
+    """ A 'sign-in' for when the patient arrives. """
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -53,11 +56,21 @@ def get_patient_id(full_name, image_data):
     args = (full_name, )
 
     c.execute(sql_command, args)
+    candidate_ids = [x[0] for x in c.fetchall()]
     conn.close()
 
+    return image_util.best_face_match(image_data, candidate_ids)
 
-# TODO: Create patient entry and link with face image
-# Face images will go in a folder corresponding to the patient id.
+
+# TODO: Search around in the room until AIMAR sees a face.
+def verify_patient_id(patient_id, image_data):
+    """ After arriving in a room where a patient is waiting, AIMAR needs to verify if this is the correct patient.
+    :return: True or False - if the face and patient_id match up.
+    """
+    return image_util.best_face_match(image_data, [patient_id]) > 0
+
+
+# Face image for patient number N goes in folder ./images/patients/N
 def insert_patient(full_name, image_data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -69,6 +82,14 @@ def insert_patient(full_name, image_data):
     c.execute(sql_command, args)
     conn.commit()
     conn.close()
+
+    patient_dir = f"./images/patients/{patient_id}"
+    # Create a folder for new patient, then save
+    if not os.path.exists(patient_dir):
+        os.mkdir(patient_dir)
+    if image_data is not None:
+        image_util.buffer_to_img(image_data, patient_dir)
+        # TODO: Either make an image mandatory or support other authentication
     print(f"Added new patient {full_name} with id {patient_id}.")
     resp_string = ""
     return resp_string
@@ -100,16 +121,27 @@ def get_max_patient_id():
     c.execute('SELECT MAX(patient_id) FROM patients')
     patient_id = c.fetchone()[0]
     conn.close()
+
+    if patient_id is None:
+        return 0
     return patient_id
 
 
-def create_patient_table():
+def create_table_patients():
+    create_table('patients', PATIENT_COLUMN_ORDER, PATIENT_COLUMN_TYPES)
+
+
+def create_table_visits():
+    create_table('visits', VISIT_COLUMN_ORDER, VISIT_COLUMN_TYPES)
+
+
+def create_table(table_name, column_order, column_types):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    sql_command = 'CREATE TABLE patients('
-    for param in PATIENT_COLUMN_ORDER:
-        sql_command += param + " " + PATIENT_COLUMN_TYPES[param] + ','
+    sql_command = f'CREATE TABLE {table_name}('
+    for param in column_order:
+        sql_command += param + " " + column_types[param] + ','
     sql_command = sql_command[:-1] + ')'
 
     c.execute(sql_command)
@@ -149,4 +181,4 @@ def generate_patients(num_patients):
     for patient in datagen.generate_patients(num_patients):
         # TODO: Generate random faces or use filler images
         image_data = None
-        insert_patient(patient, image_data)
+        insert_patient(patient['first_name'], image_data)
