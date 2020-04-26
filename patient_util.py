@@ -17,24 +17,43 @@ VISIT_COLUMN_TYPES = {
 }
 PATIENT_COLUMN_COUNT = len(PATIENT_COLUMN_ORDER)
 VISIT_COLUMN_COUNT = len(VISIT_COLUMN_ORDER)
+ROOM_COORDINATES = {}
 
 # TODO: Migrate to SQLAlchemy
-checkup_room_queue = []  # Doesn't need to be persistent.
+checkup_room_queue = []  # List of tuples (patient_id, room_coordinates): (int, (float, float))
 
 
-def enqueue_patient(patient_id):
-    """ Signals that a patient is now waiting in an individual room, where AIMAR can come check up on them. """
-    checkup_room_queue.append(patient_id)
+"""
+Enqueuing/dequeuing patients
+"""
+
+
+def enqueue_patient(patient_id, room_location):
+    """ Signals that a patient is now waiting in an individual room, where AIMAR can come check up on them.
+    room_location is either a room number (int) or a coordinate pair (tuple of 2 floats)
+    """
+    if isinstance(room_location, int):
+        if room_location in ROOM_COORDINATES:
+            room_coordinates = ROOM_COORDINATES[room_location]
+            checkup_room_queue.append((patient_id, room_coordinates))
+    elif isinstance(room_location, tuple):
+        if len(room_location) == 2 and isinstance(room_location[0], float) and isinstance(room_location[1], float):
+            checkup_room_queue.append((patient_id, room_location))
 
 
 def dequeue_patient():
-    """ Gets the next patient we want AIMAR to go check up on. 0 means the queue is empty. """
+    """ Gets the next patient we want AIMAR to go check up on. Returns None, None if queue is empty. """
     if not checkup_room_queue:
-        return 0
+        return None, None
     return checkup_room_queue.pop(0)
 
 
-def is_patient_registered(patient_id):
+"""
+Data storage, retrieval, and authentication
+"""
+
+
+def get_patient_info(patient_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -43,8 +62,7 @@ def is_patient_registered(patient_id):
 
     c.execute(sql_command, args)
     conn.close()
-    resp_string = str(c.fetchone())
-    return resp_string
+    return str(c.fetchone())
 
 
 def get_patient_id(full_name, image_data):
@@ -111,7 +129,7 @@ def delete_patient(patient_id):
 
 
 """
-Put utility functions here that are not client-callable.
+Utility functions that are not client-callable
 """
 
 
@@ -182,3 +200,14 @@ def generate_patients(num_patients):
         # TODO: Generate random faces or use filler images
         image_data = None
         insert_patient(patient['first_name'], image_data)
+
+
+def load_room_coordinates():
+    global ROOM_COORDINATES
+    # TODO: Load coordinate data either from a config or database table
+    # Hardcode these for testing
+    ROOM_COORDINATES = {0: (0.0, 0.0),
+                        1: (1.0, 0.0)}
+
+
+load_room_coordinates()

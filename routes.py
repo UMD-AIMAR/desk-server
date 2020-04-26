@@ -27,8 +27,7 @@ except ImportError as e:
 @app.route('/index')
 def index():
     # This will return a web page containing the user interface.
-    user = {'username': 'AIMAR'}
-    return render_template('index.html', title='Home', user=user)
+    return "AIMAR homepage!"
 
 
 @app.route('/api/patient/insert', methods=['POST'])
@@ -50,7 +49,10 @@ def modify_patient():
 def is_patient_registered():
     patient_id = request.args.get('patient_id')
     if patient_id:
-        return patient_util.is_patient_registered(patient_id)
+        patient_info_str = patient_util.get_patient_info(patient_id)
+        if patient_info_str:
+            return jsonify({'patient_info': patient_info_str})
+    return jsonify({'error': 'no patient_id provided'})
 
 
 @app.route('/api/patient/fetch', methods=['POST'])
@@ -74,23 +76,34 @@ def verify_patient():
                 return jsonify({})
             return jsonify({'error': 'verification failed'}), 400
     except ValueError:
-        return ''
+        return jsonify({'error': 'received non-numeric patient_id string'})
 
 
-@app.route('/api/patient/enqueue', methods=['GET'])
+# requests.post("http://10.0.0.10:5000/api/patient/enqueue?patient_id=1&room_number=0")
+# requests.post("http://10.0.0.10:5000/api/patient/enqueue?patient_id=1&room_number=1")
+# requests.post("http://10.0.0.10:5000/api/patient/dequeue")
+@app.route('/api/patient/enqueue', methods=['POST'])
 def enqueue_patient():
     try:
         patient_id = request.args.get('patient_id')
-        if patient_id:
-            return patient_util.enqueue_patient(int(patient_id))
+        room_number = request.args.get('room_number')
+        x, y = request.args.get('x'), request.args.get('y')
+        room_location = (float(x), float(y)) if (x is not None and y is not None) else int(room_number)
+        if patient_id is not None and room_location is not None:
+            patient_util.enqueue_patient(int(patient_id), room_location)
+            return jsonify({})
+        return jsonify({'error': 'encountered null argument'}), 400
     except ValueError:
-        return ''
+        return jsonify({'error': 'received non-numeric string argument'}), 400
 
 
-@app.route('/api/patient/dequeue', methods=['GET'])
+@app.route('/api/patient/dequeue', methods=['POST'])
 def dequeue_patient():
-    patient_id = patient_util.dequeue_patient()
-    return jsonify({'patient_id': patient_id})
+    patient_id, coordinates = patient_util.dequeue_patient()
+    if patient_id:
+        return jsonify({'patient_id': patient_id, 'coordinates': coordinates})
+    else:
+        return jsonify({'error': 'queue is empty'}), 400
 
 
 @app.route('/api/skin', methods=['POST'])
@@ -104,4 +117,4 @@ if __name__ == "__main__":
     if not os.path.exists("./images/patients"):
         os.mkdir("./images/patients")
     ip = input("Desktop IP: ")
-    app.run(host=ip, port="5000", debug=False)
+    app.run(host=ip, port=5000, debug=False)
