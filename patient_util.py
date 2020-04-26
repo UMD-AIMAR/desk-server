@@ -28,24 +28,36 @@ Enqueuing/dequeuing patients
 """
 
 
-def enqueue_patient(patient_id, room_location):
+def enqueue_patient(request):
     """ Signals that a patient is now waiting in an individual room, where AIMAR can come check up on them.
     room_location is either a room number (int) or a coordinate pair (tuple of 2 floats)
     """
-    if isinstance(room_location, int):
-        if room_location in ROOM_COORDINATES:
-            room_coordinates = ROOM_COORDINATES[room_location]
-            checkup_room_queue.append((patient_id, room_coordinates))
-    elif isinstance(room_location, tuple):
-        if len(room_location) == 2 and isinstance(room_location[0], float) and isinstance(room_location[1], float):
-            checkup_room_queue.append((patient_id, room_location))
+
+    try:
+        patient_id = request.args.get('patient_id')
+        room_number = request.args.get('room_number')
+        x, y = request.args.get('x'), request.args.get('y')
+        room_location = (float(x), float(y)) if (x is not None and y is not None) else int(room_number)
+        if patient_id is None or room_location is None:
+            return {'error': 'encountered null argument'}
+        elif isinstance(room_location, int):
+            if room_location in ROOM_COORDINATES:
+                room_coordinates = ROOM_COORDINATES[room_location]
+                checkup_room_queue.append((patient_id, room_coordinates))
+        elif isinstance(room_location, tuple):
+            if len(room_location) == 2 and isinstance(room_location[0], float) and isinstance(room_location[1], float):
+                checkup_room_queue.append((patient_id, room_location))
+        return {}
+    except ValueError:
+        return {'error': 'received non-numeric string argument'}
 
 
-def dequeue_patient():
+def dequeue_patient(request):
     """ Gets the next patient we want AIMAR to go check up on. Returns None, None if queue is empty. """
     if not checkup_room_queue:
-        return None, None
-    return checkup_room_queue.pop(0)
+        return {'error': 'queue is empty'}
+    patient_id, coordinates = checkup_room_queue.pop(0)
+    return {'patient_id': patient_id, 'coordinates': coordinates}
 
 
 """
@@ -53,7 +65,11 @@ Data storage, retrieval, and authentication
 """
 
 
-def get_patient_info(patient_id):
+def get_patient_info(request):
+    patient_id = request.args.get('patient_id')
+    if not patient_id:
+        return {'error': 'no patient_id provided'}
+
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -62,11 +78,14 @@ def get_patient_info(patient_id):
 
     c.execute(sql_command, args)
     conn.close()
-    return str(c.fetchone())
+    return {'patient_info': str(c.fetchone())}
 
 
-def get_patient_id(full_name, image_data):
+def get_patient_id(request):
     """ A 'sign-in' for when the patient arrives. """
+    full_name = request.args.get('full_name')
+    image_data = request.data
+
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -77,19 +96,40 @@ def get_patient_id(full_name, image_data):
     candidate_ids = [x[0] for x in c.fetchall()]
     conn.close()
 
-    return image_util.best_face_match(image_data, candidate_ids)
+    patient_id = image_util.best_face_match(image_data, candidate_ids)
+
+    if patient_id == -1:
+        return {'error': 'must provide name and face image.'}
+    elif patient_id == 0:
+        return {'error': 'name is not in database'}
+    return {'patient_id': patient_id}
 
 
 # TODO: Search around in the room until AIMAR sees a face.
-def verify_patient_id(patient_id, image_data):
+def verify_patient_id(request):
     """ After arriving in a room where a patient is waiting, AIMAR needs to verify if this is the correct patient.
     :return: True or False - if the face and patient_id match up.
     """
-    return image_util.best_face_match(image_data, [patient_id]) > 0
+    try:
+        patient_id = request.args.get('patient_id')
+        image_data = request.data
+        if patient_id:
+            is_match = image_util.best_face_match(image_data, [patient_id]) > 0
+            if is_match:
+                return {}
+            return {'error': 'verification failed'}
+    except ValueError:
+        return {'error': 'received non-numeric patient_id string'}
 
 
 # Face image for patient number N goes in folder ./images/patients/N
-def insert_patient(full_name, image_data):
+def insert_patient(request):
+    full_name, image_data = request.args.get('full_name'), request.data
+    insert_patient_helper(full_name, image_data)
+    return {}
+
+
+def insert_patient_helper(full_name, image_data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -107,13 +147,11 @@ def insert_patient(full_name, image_data):
         os.mkdir(patient_dir)
     if image_data is not None:
         image_util.buffer_to_img(image_data, patient_dir)
-        # TODO: Either make an image mandatory or support other authentication
     print(f"Added new patient {full_name} with id {patient_id}.")
-    resp_string = ""
-    return resp_string
 
 
-def delete_patient(patient_id):
+def delete_patient(request):
+    patient_id = request.args.get('patient_id')
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -124,8 +162,7 @@ def delete_patient(patient_id):
     conn.commit()
     conn.close()
     print(f"Deleted patient id {patient_id}.")
-    resp_string = ""
-    return resp_string
+    return {}
 
 
 """
@@ -199,11 +236,12 @@ def generate_patients(num_patients):
     for patient in datagen.generate_patients(num_patients):
         # TODO: Generate random faces or use filler images
         image_data = None
-        insert_patient(patient['first_name'], image_data)
+        insert_patient_helper(patient['first_name'], image_data)
 
 
 def load_room_coordinates():
     global ROOM_COORDINATES
+    # TODO: Have some way of saving coordinate data from Turtlebot active environment
     # TODO: Load coordinate data either from a config or database table
     # Hardcode these for testing
     ROOM_COORDINATES = {0: (0.0, 0.0),

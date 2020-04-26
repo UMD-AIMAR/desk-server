@@ -63,8 +63,9 @@ def best_face_match(buffer_data, candidate_ids):
     return 0
 
 
-def classify_skin(buffer_data):
-    # TODO: This should be inside the specific patient's folder
+def classify_skin(request):
+    # TODO: Patient ID should also be provided, and image should be saved inside the that patient's folder
+    buffer_data = request.data
     img = buffer_to_img(buffer_data, "./images")
     print(f"Received skin lesion image with shape {img.shape}")
 
