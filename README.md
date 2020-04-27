@@ -26,7 +26,7 @@ Open a Terminal and run:
 Open a Terminal/Command Prompt, navigate to the folder 'desk-server', and run:
 > python routes.py
 
-When prompted for the Desktop IP, type 'localhost'.
+When prompted for the Desktop IP, type "localhost" (without the quotes).
 
 Then, go to `http://localhost:5000` in your browser. You should see a page with the text "AIMAR Homepage!"
 That's it! You're now running a Flask server on your own computer.
