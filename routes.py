@@ -1,82 +1,123 @@
+# TODO: Add HTTP codes, not a big deal
 import os
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 skin_imported = False
 db_imported = False
 
 try:
-    print("importing db...")
+    print("importing patient_util...")
     import patient_util
     db_imported = True
 except ImportError as e:
     print(e)
-    print("unable to import db.py")
+    print("unable to import patient_util.py")
 
 try:
-    print("importing skin...")
+    print("importing image_util...")
     import image_util
     skin_imported = True
 except ImportError as e:
     print(e)
-    print("keras/tensorflow not installed. disabling skin functions")
+    print("face_recognition/keras/tensorflow not installed. disabling image_util.py")
 
 
 @app.route('/')
 @app.route('/index')
 def index():
-    # This will return a web page containing the user interface.
-    return "AIMAR homepage!"
+    return render_template('index.html')
 
 
-# TODO: Add HTTP codes, not a big deal
+
+"""
+Basic database operations
+"""
+
+
+# Insert new patient into database
 @app.route('/api/patient/insert', methods=['POST'])
 def insert_patient():
     return jsonify(patient_util.insert_patient(request))
 
 
-@app.route('/api/patient/delete', methods=['GET'])
+# Delete patient from database
+@app.route('/api/patient/delete', methods=['POST'])
 def delete_patient():
     return jsonify(patient_util.delete_patient(request))
 
 
-@app.route('/api/patient/modify', methods=['GET'])
+# Change patient info - not implemented yet
+@app.route('/api/patient/modify', methods=['POST'])
 def modify_patient():
     return jsonify({})
 
 
+# Query patient info - includes what room they are in, if any
 @app.route('/api/patient/query', methods=['GET'])
-def is_patient_registered():
-    return jsonify(patient_util.get_patient_info(request))
+def query_patient():
+    return jsonify(patient_util.query_patient(request))
 
 
-@app.route('/api/patient/fetch', methods=['POST'])
-def get_patient_id():
-    return jsonify(patient_util.get_patient_id(request))
+# Given a face and a name, finds the patient id that best matches them.
+@app.route('/api/patient/match', methods=['GET'])
+def match_patient():
+    return jsonify(patient_util.match_patient(request))
 
 
-@app.route('/api/patient/verify', methods=['POST'])
+# Given a patient id and a face, gives a True/False value for if they match.
+@app.route('/api/patient/verify', methods=['GET'])
 def verify_patient():
-    return jsonify(patient_util.verify_patient_id(request))
+    return jsonify(patient_util.verify_patient(request))
 
 
-# requests.post("http://10.0.0.10:5000/api/patient/enqueue?patient_id=1&room_number=0")
-# requests.post("http://10.0.0.10:5000/api/patient/enqueue?patient_id=1&room_number=1")
-# requests.post("http://10.0.0.10:5000/api/patient/dequeue")
+"""
+Patient Queue - Related
+"""
+
+
+# requests.post("http://localhost:5000/api/patient/enqueue?patient_id=1&room_number=0")
+# requests.post("http://localhost:5000/api/patient/enqueue?patient_id=1&room_number=1")
+# requests.post("http://localhost:5000/api/patient/dequeue")
+# Adds a patient to the queue.
 @app.route('/api/patient/enqueue', methods=['POST'])
 def enqueue_patient():
     return jsonify(patient_util.enqueue_patient(request))
 
 
+# Gets and removes the first patient from the queue.
 @app.route('/api/patient/dequeue', methods=['POST'])
 def dequeue_patient():
     return jsonify(patient_util.dequeue_patient(request))
 
 
+# Assigns a room number to a patient. When commanding "check on (person's name)", AIMAR will know where the person is.
+@app.route('/api/patient/assignroom', methods=['POST'])
+def assign_room_patient():
+    return jsonify(patient_util.assign_room_patient(request))
+
+
+"""
+Skin lesion classification
+"""
+
+
+# Diagnoses a skin image.
 @app.route('/api/skin', methods=['POST'])
-def diagnose_skin_image():
+def classify_skin():
     return jsonify(image_util.classify_skin(request))
+
+
+# For the homepage interface
+@app.route('/api/queue', methods=['GET'])
+def get_queue():
+    return jsonify(patient_util.get_queue())
+
+
+@app.route('/api/rooms', methods=['GET'])
+def get_patient_room_pairings():
+    return jsonify(patient_util.get_patient_room_pairings())
 
 
 if __name__ == "__main__":

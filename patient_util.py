@@ -19,45 +19,10 @@ PATIENT_COLUMN_COUNT = len(PATIENT_COLUMN_ORDER)
 VISIT_COLUMN_COUNT = len(VISIT_COLUMN_ORDER)
 ROOM_COORDINATES = {}
 
+patient_checkup_queue = []  # List of patient IDs
+patient_room_pairings = {}
+
 # TODO: Migrate to SQLAlchemy
-checkup_room_queue = []  # List of tuples (patient_id, room_coordinates): (int, (float, float))
-
-
-"""
-Enqueuing/dequeuing patients
-"""
-
-
-def enqueue_patient(request):
-    """ Signals that a patient is now waiting in an individual room, where AIMAR can come check up on them.
-    room_location is either a room number (int) or a coordinate pair (tuple of 2 floats)
-    """
-
-    try:
-        patient_id = request.args.get('patient_id')
-        room_number = request.args.get('room_number')
-        x, y = request.args.get('x'), request.args.get('y')
-        room_location = (float(x), float(y)) if (x is not None and y is not None) else int(room_number)
-        if patient_id is None or room_location is None:
-            return {'error': 'encountered null argument'}
-        elif isinstance(room_location, int):
-            if room_location in ROOM_COORDINATES:
-                room_coordinates = ROOM_COORDINATES[room_location]
-                checkup_room_queue.append((patient_id, room_coordinates))
-        elif isinstance(room_location, tuple):
-            if len(room_location) == 2 and isinstance(room_location[0], float) and isinstance(room_location[1], float):
-                checkup_room_queue.append((patient_id, room_location))
-        return {}
-    except ValueError:
-        return {'error': 'received non-numeric string argument'}
-
-
-def dequeue_patient(request):
-    """ Gets the next patient we want AIMAR to go check up on. Returns None, None if queue is empty. """
-    if not checkup_room_queue:
-        return {'error': 'queue is empty'}
-    patient_id, coordinates = checkup_room_queue.pop(0)
-    return {'patient_id': patient_id, 'coordinates': coordinates}
 
 
 """
@@ -65,7 +30,58 @@ Data storage, retrieval, and authentication
 """
 
 
-def get_patient_info(request):
+def insert_patient(request):
+    """ Contains patient name (request.args.get('full_name') and face image (request.data).
+     We extract the arguments from the request here and feed them to a helper function.
+     We require the use of a helper function in order to internally generate random patients. """
+    full_name, image_data = request.args.get('full_name'), request.data
+    insert_patient_helper(full_name, image_data)
+    return {}
+
+
+def insert_patient_helper(full_name, image_data):
+    """ Saves the patient's name with a generated patient ID.
+    Saves face image inside the folder ./images/patients/(patient ID). """
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    patient_id = get_max_patient_id() + 1
+    sql_command = 'INSERT INTO patients VALUES(' + '?, ?)'
+    args = (patient_id, full_name)
+
+    c.execute(sql_command, args)
+    conn.commit()
+    conn.close()
+
+    patient_dir = f"./images/patients/{patient_id}"
+    # Create a folder for new patient, then save
+    if not os.path.exists(patient_dir):
+        os.mkdir(patient_dir)
+    if image_data is not None:
+        image_util.buffer_to_img(image_data, patient_dir)
+    print(f"Added new patient {full_name} with id {patient_id}.")
+
+
+def delete_patient(request):
+    """ Deletes the patient from the table. """
+    # TODO: Delete the folder
+    patient_id = request.args.get('patient_id')
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    sql_command = 'DELETE FROM patients WHERE patient_id=?'
+    args = (patient_id,)
+
+    c.execute(sql_command, args)
+    conn.commit()
+    conn.close()
+    print(f"Deleted patient id {patient_id}.")
+    return {}
+
+
+def query_patient(request):
+    """ Gets the database row associated with the specified patient ID.
+    If the patient is currently waiting in a room, returns a room number (if not, returns -1). """
     patient_id = request.args.get('patient_id')
     if not patient_id:
         return {'error': 'no patient_id provided'}
@@ -78,11 +94,13 @@ def get_patient_info(request):
 
     c.execute(sql_command, args)
     conn.close()
-    return {'patient_info': str(c.fetchone())}
+    return {'patient_info': str(c.fetchone()),
+            'room_number': patient_room_pairings.get(patient_id, -1)}
 
 
-def get_patient_id(request):
-    """ A 'sign-in' for when the patient arrives. """
+def match_patient(request):
+    """ Finds the patient_id whose associated name+face best match the provided name+face.
+    The name has to be an identical match. """
     full_name = request.args.get('full_name')
     image_data = request.data
 
@@ -106,63 +124,65 @@ def get_patient_id(request):
 
 
 # TODO: Search around in the room until AIMAR sees a face.
-def verify_patient_id(request):
-    """ After arriving in a room where a patient is waiting, AIMAR needs to verify if this is the correct patient.
-    :return: True or False - if the face and patient_id match up.
-    """
+def verify_patient(request):
+    """ Provided an image and a patient_id, verify this new image against existing face images of the patient_id.
+    :return: True or False - if the face and patient_id match up. """
+    patient_id = request.args.get('patient_id')
+    image_data = request.data
     try:
-        patient_id = request.args.get('patient_id')
-        image_data = request.data
-        if patient_id:
-            is_match = image_util.best_face_match(image_data, [patient_id]) > 0
-            if is_match:
-                return {}
+        is_match = image_util.best_face_match(image_data, [int(patient_id)]) > 0
+        if is_match:
+            return {}
+        else:
             return {'error': 'verification failed'}
     except ValueError:
         return {'error': 'received non-numeric patient_id string'}
 
 
-# Face image for patient number N goes in folder ./images/patients/N
-def insert_patient(request):
-    full_name, image_data = request.args.get('full_name'), request.data
-    insert_patient_helper(full_name, image_data)
-    return {}
+"""
+Enqueuing/dequeuing patients
+"""
 
 
-def insert_patient_helper(full_name, image_data):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-
-    patient_id = get_max_patient_id() + 1
-    sql_command = 'INSERT INTO patients VALUES(' + '?, ?)'
-    args = (patient_id, full_name)
-
-    c.execute(sql_command, args)
-    conn.commit()
-    conn.close()
-
-    patient_dir = f"./images/patients/{patient_id}"
-    # Create a folder for new patient, then save
-    if not os.path.exists(patient_dir):
-        os.mkdir(patient_dir)
-    if image_data is not None:
-        image_util.buffer_to_img(image_data, patient_dir)
-    print(f"Added new patient {full_name} with id {patient_id}.")
-
-
-def delete_patient(request):
+def enqueue_patient(request):
+    """ Signals that a patient is now waiting in an individual room, where AIMAR can come check up on them.
+    Adds a specified patient_id to the queue.
+    """
     patient_id = request.args.get('patient_id')
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-
-    sql_command = 'DELETE FROM patients WHERE patient_id=?'
-    args = (patient_id,)
-
-    c.execute(sql_command, args)
-    conn.commit()
-    conn.close()
-    print(f"Deleted patient id {patient_id}.")
+    try:
+        patient_checkup_queue.append(int(patient_id))
+    except ValueError:
+        return {'error': f"{request.args.get('patient_id')} is not an integer"}
     return {}
+
+
+def dequeue_patient(request):
+    """ Gets the next patient we want AIMAR to go check up on. Returns None, None if queue is empty. """
+    if not patient_checkup_queue:
+        return {'error': 'queue is empty'}
+    patient_id = patient_checkup_queue.pop(0)
+    return {'patient_id': patient_id}
+
+
+def assign_room_patient(request):
+    patient_id = request.args.get('patient_id')
+    room_number = request.args.get('room_number')
+    try:
+        patient_room_pairings[int(patient_id)] = int(room_number)
+    except ValueError:
+        return {'error': f"{patient_id} and/or {room_number} is not an integer"}
+
+
+def get_room_coordinates(request):
+    try:
+        room_number = request.args.get('room_number')
+        if room_number in ROOM_COORDINATES:
+            x, y = ROOM_COORDINATES[room_number]
+            return {'x': x, 'y': y}
+        else:
+            return {'error': f"no coordinates found for room number {room_number}"}
+    except ValueError:
+        return {'error': f"{request.args.get('room_number')} is not an integer"}
 
 
 """
@@ -239,10 +259,16 @@ def generate_patients(num_patients):
         insert_patient_helper(patient['first_name'], image_data)
 
 
+def get_queue():
+    return {'queue': patient_checkup_queue}
+
+
+def get_patient_room_pairings():
+    return patient_room_pairings
+
+
 def load_room_coordinates():
     global ROOM_COORDINATES
-    # TODO: Have some way of saving coordinate data from Turtlebot active environment
-    # TODO: Load coordinate data either from a config or database table
     # Hardcode these for testing
     ROOM_COORDINATES = {0: (0.0, 0.0),
                         1: (1.0, 0.0)}
