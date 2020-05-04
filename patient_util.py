@@ -1,3 +1,4 @@
+import ast
 import os
 import sqlite3
 import datagen
@@ -90,12 +91,14 @@ def query_patient(request):
     c = conn.cursor()
 
     sql_command = 'SELECT * FROM patients WHERE patient_id=?'
-    args = (str(patient_id))
+    args = patient_id
 
     c.execute(sql_command, args)
+    patient_info = str(c.fetchone())
+
     conn.close()
-    return {'patient_info': str(c.fetchone()),
-            'room_number': patient_room_pairings.get(patient_id, -1)}
+    return {'patient_info': ast.literal_eval(patient_info),
+            'room_number': patient_room_pairings.get(int(patient_id), -1)}
 
 
 def match_patient(request):
@@ -164,7 +167,7 @@ def dequeue_patient(request):
     return {'patient_id': patient_id}
 
 
-def assign_room_patient(request):
+def assign_patient_room(request):
     patient_id = request.args.get('patient_id')
     room_number = request.args.get('room_number')
     try:
@@ -173,9 +176,20 @@ def assign_room_patient(request):
         return {'error': f"{patient_id} and/or {room_number} is not an integer"}
 
 
+def leave_patient_room(request):
+    patient_id = request.args.get('patient_id')
+    try:
+        del patient_room_pairings[int(patient_id)]
+    except ValueError:
+        return {'error': f"{patient_id} is not an integer"}
+    except KeyError:
+        return {'error': f"{patient_id} is not currently assigned to a room."}
+    return {}
+
+
 def get_room_coordinates(request):
     try:
-        room_number = request.args.get('room_number')
+        room_number = int(request.args.get('room_number'))
         if room_number in ROOM_COORDINATES:
             x, y = ROOM_COORDINATES[room_number]
             return {'x': x, 'y': y}
@@ -270,8 +284,10 @@ def get_patient_room_pairings():
 def load_room_coordinates():
     global ROOM_COORDINATES
     # Hardcode these for testing
-    ROOM_COORDINATES = {0: (0.0, 0.0),
-                        1: (1.0, 0.0)}
+    # ROOM_COORDINATES = {0: (0.0, 0.0),
+    #                     1: (1.0, 0.0)}
+    import random
+    ROOM_COORDINATES = {i: (random.random(), random.random()) for i in range(10)}
 
 
 load_room_coordinates()

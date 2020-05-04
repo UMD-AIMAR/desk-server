@@ -1,4 +1,3 @@
-# TODO: Add HTTP codes, not a big deal
 import os
 
 from flask import Flask, request, jsonify, render_template
@@ -24,11 +23,11 @@ except ImportError as e:
     print("face_recognition/keras/tensorflow not installed. disabling image_util.py")
 
 
+# TODO: Add HTTP codes
 @app.route('/')
 @app.route('/index')
 def index():
     return render_template('index.html')
-
 
 
 """
@@ -93,9 +92,34 @@ def dequeue_patient():
 
 
 # Assigns a room number to a patient. When commanding "check on (person's name)", AIMAR will know where the person is.
-@app.route('/api/patient/assignroom', methods=['POST'])
-def assign_room_patient():
-    return jsonify(patient_util.assign_room_patient(request))
+@app.route('/api/patient/assign', methods=['POST'])
+def assign_patient_room():
+    return jsonify(patient_util.assign_patient_room(request))
+
+
+@app.route('/api/patient/leave', methods=['POST'])
+def leave_patient_room():
+    return jsonify(patient_util.leave_patient_room(request))
+
+
+@app.route('/api/room/coordinates', methods=['GET'])
+def get_room_coordinates():
+    return jsonify(patient_util.get_room_coordinates(request))
+
+
+"""
+To display patient queue information in browser
+"""
+
+
+@app.route('/api/queue', methods=['GET'])
+def get_queue():
+    return jsonify(patient_util.get_queue())
+
+
+@app.route('/api/room/list', methods=['GET'])
+def get_patient_room_pairings():
+    return jsonify(patient_util.get_patient_room_pairings())
 
 
 """
@@ -107,17 +131,6 @@ Skin lesion classification
 @app.route('/api/skin', methods=['POST'])
 def classify_skin():
     return jsonify(image_util.classify_skin(request))
-
-
-# For the homepage interface
-@app.route('/api/queue', methods=['GET'])
-def get_queue():
-    return jsonify(patient_util.get_queue())
-
-
-@app.route('/api/rooms', methods=['GET'])
-def get_patient_room_pairings():
-    return jsonify(patient_util.get_patient_room_pairings())
 
 
 if __name__ == "__main__":

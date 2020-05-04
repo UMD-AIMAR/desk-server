@@ -3,10 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <title>AIMAR</title>
-     <script src="{{url_for('static', filename='main.js')}}"></script>
+<!--     <script src="{{url_for('static', filename='main.js')}}"></script>-->
+    <script src="../static/main.js"></script>
+    <link rel="stylesheet" type="text/css" href="../static/main.css">
 </head>
 <body>
 <p>AIMAR homepage!</p>
-<div id="queue"></div>
+
+<div class="row">
+
+    <div class="column">
+
+        <div>
+            Enqueue patient: <input type="text" id="enqueuePatient" placeholder="Patient ID">
+        </div>
+
+        <div>
+            Assign to room:
+            <input type="text" id="assignPatient" placeholder="Patient ID">
+            <input type="text" id="assignRoom" placeholder="Room Number">
+        </div>
+
+        <div>
+            Clear room assignment:
+            <input type="text" id="leaveRoom" placeholder="Patient ID">
+        </div>
+
+        <div>
+            <button id="dequeuePatient">Dequeue Patient</button> Queue: [<span id="queue"></span>]
+        </div>
+
+        <div>
+            Room pairings:
+            <table id="room_table">
+                <tr>
+                    <th>Patient ID</th>
+                    <th>Room #</th>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+
+</div>
+
 </body>
 </html>
